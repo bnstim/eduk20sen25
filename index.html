@@ -200,12 +200,6 @@
             <div class="multi-dropdown" id="muni-dropdown"></div>
             <div class="selected-tags" id="muni-tags"></div>
           </div>
-          <div class="filter-label">Ethnicity</div>
-          <div class="multi-select-container">
-            <input class="multi-select-input" type="text" id="eth-search" placeholder="Search ethnicities…" autocomplete="off">
-            <div class="multi-dropdown" id="eth-dropdown"></div>
-            <div class="selected-tags" id="eth-tags"></div>
-          </div>
           <button class="clear-btn" id="clear-filters-btn">Clear all filters</button>
         </div>
       </div>
@@ -217,7 +211,7 @@
       <img src="TimMaps2024Logo.png" alt="TimMaps logo">
       <div id="attribution-text">
         <strong>Timothy Hormigos</strong>
-        <p>@bnstim &nbsp;·&nbsp; <a href="#">TimMaps</a></p>
+        <p>@bnstim &nbsp;·&nbsp; <a href="#">bnsph.org@gmail.com</a></p>
         <p style="margin-top:2px;font-size:8px;color:#aaa">Data: COMELEC &nbsp;·&nbsp; CPH 2020 (PSA)</p>
       </div>
     </div>
@@ -267,13 +261,10 @@ const EDU_GRANULAR = [
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let DATA = [], CANDIDATES = [];
-let ALL_PROVINCES = [], ALL_MUNIS = [], ALL_ETHNICITIES = [];
+let ALL_PROVINCES = [], ALL_MUNIS = [];
 let PROV_TO_MUNIS = {};      // { province: Set<municipality> }
-let PROV_TO_ETHS  = {};      // { province: Set<ethnicity> }
-let MUNI_TO_ETHS  = {};      // { municipality: Set<ethnicity> }
 const selectedProvinces  = new Set();
 const selectedMunis      = new Set();
-const selectedEths       = new Set();
 const selectedCandidates = new Set();
 let currentEduKey  = 'Gr_HS';
 let scaleByVoters  = true;
@@ -335,8 +326,7 @@ function parseData(text) {
 
   // Candidates: headers matching /^\d+\./
   CANDIDATES = headers.filter(h => /^\d+\./.test(h));
-
-  const provSet = new Set(), muniSet = new Set(), ethSet = new Set();
+  const provSet = new Set(), muniSet = new Set();
   let vMin = Infinity, vMax = 0;
 
   for (let i = 1; i < lines.length; i++) {
@@ -360,7 +350,6 @@ function parseData(text) {
     const row = {
       prov, brgy,
       muni: (muni && muni !== '#N/A') ? muni : null,
-      eth:  (eth  && eth  !== '#N/A') ? eth  : null,
       voters,
       candidates: {},
       eg: {},   // edu grouped
@@ -382,15 +371,6 @@ function parseData(text) {
       if (!PROV_TO_MUNIS[prov]) PROV_TO_MUNIS[prov] = new Set();
       PROV_TO_MUNIS[prov].add(row.muni);
     }
-    if (row.eth) {
-      ethSet.add(row.eth);
-      if (!PROV_TO_ETHS[prov]) PROV_TO_ETHS[prov] = new Set();
-      PROV_TO_ETHS[prov].add(row.eth);
-      if (row.muni) {
-        if (!MUNI_TO_ETHS[row.muni]) MUNI_TO_ETHS[row.muni] = new Set();
-        MUNI_TO_ETHS[row.muni].add(row.eth);
-      }
-    }
     if (voters > vMax) vMax = voters;
     if (voters < vMin) vMin = voters;
 
@@ -399,7 +379,6 @@ function parseData(text) {
 
   ALL_PROVINCES   = [...provSet].sort();
   ALL_MUNIS       = [...muniSet].sort();
-  ALL_ETHNICITIES = [...ethSet].sort();
   VOTERS_MIN = vMin === Infinity ? 0 : vMin;
   VOTERS_MAX = vMax;
 }
@@ -408,7 +387,7 @@ function parseData(text) {
 function buildUI() {
   buildCandidateList();
   buildEduRadios();
-  ['prov','muni','eth'].forEach(id => rebuildDDOptions(id, ''));
+  ['prov','muni'].forEach(id => rebuildDDOptions(id, ''));
   wireEvents();
   updateStatus();
 }
@@ -495,25 +474,8 @@ const DD_CONFIG = {
       return [...munis].sort();
     },
     sel: selectedMunis
-  },
-  eth:  {
-    all: () => {
-      const hasProv = selectedProvinces.size > 0;
-      const hasMuni = selectedMunis.size > 0;
-      if (!hasProv && !hasMuni) return ALL_ETHNICITIES;
-      const eths = new Set();
-      if (hasMuni) {
-        // Munis selected — show only their ethnicities
-        selectedMunis.forEach(m => { (MUNI_TO_ETHS[m] || new Set()).forEach(e => eths.add(e)); });
-      } else {
-        // Only provinces selected
-        selectedProvinces.forEach(p => { (PROV_TO_ETHS[p] || new Set()).forEach(e => eths.add(e)); });
-      }
-      return [...eths].sort();
-    },
-    sel: selectedEths
   }
-};
+};;
 
 function rebuildDDOptions(id, filter) {
   const { all, sel } = DD_CONFIG[id];
@@ -536,9 +498,7 @@ function rebuildDDOptions(id, filter) {
         selectedMunis.forEach(m => { if (!validSet.has(m)) selectedMunis.delete(m); });
         rebuildDDOptions('muni', document.getElementById('muni-search').value);
         renderTags('muni');
-        cascadeEth();
       }
-      if (id === 'muni') cascadeEth();
     });
     div.append(cb, document.createTextNode('\u00a0' + opt));
     dd.appendChild(div);
@@ -565,20 +525,11 @@ function renderTags(id) {
         selectedMunis.forEach(m => { if (!validSet.has(m)) selectedMunis.delete(m); });
         rebuildDDOptions('muni', document.getElementById('muni-search').value);
         renderTags('muni');
-        cascadeEth();
       }
-      if (id === 'muni') cascadeEth();
     });
     tag.append(document.createTextNode(val), rm);
     c.appendChild(tag);
   });
-}
-
-function cascadeEth() {
-  const validEths = new Set(DD_CONFIG.eth.all());
-  selectedEths.forEach(e => { if (!validEths.has(e)) selectedEths.delete(e); });
-  rebuildDDOptions('eth', document.getElementById('eth-search').value);
-  renderTags('eth');
 }
 
 function wireEvents() {
@@ -609,7 +560,7 @@ function wireEvents() {
   });
 
   document.getElementById('clear-filters-btn').addEventListener('click', () => {
-    selectedProvinces.clear(); selectedMunis.clear(); selectedEths.clear();
+    selectedProvinces.clear(); selectedMunis.clear();
     Object.keys(DD_CONFIG).forEach(id => {
       document.getElementById(`${id}-search`).value = '';
       rebuildDDOptions(id, '');
@@ -631,14 +582,13 @@ function getFiltered() {
   return DATA.filter(r => {
     if (selectedProvinces.size && !selectedProvinces.has(r.prov))  return false;
     if (selectedMunis.size     && !selectedMunis.has(r.muni))      return false;
-    if (selectedEths.size      && !selectedEths.has(r.eth))        return false;
     return true;
   });
 }
 
 function updateStatus() {
   const n = getFiltered().length;
-  const f = selectedProvinces.size + selectedMunis.size + selectedEths.size;
+  const f = selectedProvinces.size + selectedMunis.size;
   document.getElementById('status').innerHTML =
     `<b>${n.toLocaleString()}</b> of <b>${DATA.length.toLocaleString()}</b> barangays` +
     (f ? ` · <b>${f}</b> filter(s) active` : '');
